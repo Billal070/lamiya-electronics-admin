@@ -1,15 +1,20 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { ShoppingBag, Hourglass, CheckCircle2, AlertTriangle, Eye, X } from 'lucide-react';
+import { ShoppingBag, Hourglass, CheckCircle2, AlertTriangle, Eye, X, Calendar, DollarSign, ListTodo } from 'lucide-react';
 
 export default function Dashboard() {
   const [orders, setOrders] = useState([]);
-  const [stats, setStats] = useState({ totalSales: 0, pending: 0, delivered: 0, lowStock: 0 });
+  const [lowStockCount, setLowStockCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [orderItems, setOrderItems] = useState([]);
   const [modalLoading, setModalLoading] = useState(false);
+
+  // Analytics Filter States
+  const [filterType, setFilterType] = useState('monthly'); // 'daily' | 'weekly' | 'monthly' | 'custom'
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
   useEffect(() => {
     fetchDashboardData();
@@ -18,7 +23,7 @@ export default function Dashboard() {
   async function fetchDashboardData() {
     setLoading(true);
     
-    // 1. Fetch Orders
+    // 1. Fetch All Orders
     const { data: ordersData, error: ordersError } = await supabase
       .from('orders')
       .select('*')
@@ -32,18 +37,7 @@ export default function Dashboard() {
 
     if (!ordersError && ordersData) {
       setOrders(ordersData);
-      
-      // Calculate Stats
-      const deliveredOrders = ordersData.filter(o => o.order_status === 'Delivered');
-      const totalSales = deliveredOrders.reduce((acc, o) => acc + Number(o.total_amount), 0);
-      const pendingCount = ordersData.filter(o => o.order_status === 'Pending').length;
-
-      setStats({
-        totalSales,
-        pending: pendingCount,
-        delivered: deliveredOrders.length,
-        lowStock: productsData ? productsData.length : 0
-      });
+      setLowStockCount(productsData ? productsData.length : 0);
     }
     setLoading(false);
   }
@@ -56,9 +50,7 @@ export default function Dashboard() {
       .eq('id', orderId);
 
     if (!error) {
-      // Refresh local state
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, order_status: newStatus } : o));
-      fetchDashboardData(); // Recalculate stats
     } else {
       alert('স্ট্যাটাস পরিবর্তন করতে সমস্যা হয়েছে।');
     }
@@ -80,58 +72,186 @@ export default function Dashboard() {
     setModalLoading(false);
   };
 
+  // ========================================================
+  // ANALYTICS CALCULATION LOGIC (Client-side timezone-safe)
+  // ========================================================
+  const getFilteredOrders = () => {
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    return orders.filter(order => {
+      const orderDate = new Date(order.created_at);
+
+      if (filterType === 'daily') {
+        return orderDate >= todayStart;
+      }
+
+      if (filterType === 'weekly') {
+        const sevenDaysAgo = new Date(todayStart.getTime() - 7 * 24 * 60 * 60 * 1000);
+        return orderDate >= sevenDaysAgo;
+      }
+
+      if (filterType === 'monthly') {
+        const thirtyDaysAgo = new Date(todayStart.getTime() - 30 * 24 * 60 * 60 * 1000);
+        return orderDate >= thirtyDaysAgo;
+      }
+
+      if (filterType === 'custom') {
+        if (!startDate || !endDate) return true; // Show all if dates not picked yet
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999); // Set to end of selected day
+        return orderDate >= start && orderDate <= end;
+      }
+
+      return true;
+    });
+  };
+
+  // Calculate filtered stats
+  const filteredOrders = getFilteredOrders();
+  const totalOrdersCount = filteredOrders.length;
+  
+  // Total Revenue (Delivered Orders Only)
+  const deliveredOrders = filteredOrders.filter(o => o.order_status === 'Delivered');
+  const revenue = deliveredOrders.reduce((sum, o) => sum + Number(o.total_amount), 0);
+
+  // Pending Count
+  const pendingCount = filteredOrders.filter(o => o.order_status === 'Pending').length;
+
+  // Average Order Value (AOV)
+  const avgOrderValue = totalOrdersCount > 0 
+    ? Math.round(filteredOrders.reduce((sum, o) => sum + Number(o.total_amount), 0) / totalOrdersCount) 
+    : 0;
+
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-800">অ্যাডমিন ড্যাশবোর্ড</h1>
-        <p className="text-xs text-gray-500">ল্যামিয়া ইলেকট্রনিক্স এন্ড আইপিএস-এর বর্তমান অবস্থা</p>
-      </div>
-
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between">
-          <div className="space-y-1">
-            <p className="text-xs font-bold text-gray-400 uppercase">মোট বিক্রি</p>
-            <h3 className="text-2xl font-bold text-brandBlue">৳{stats.totalSales.toLocaleString()}</h3>
-          </div>
-          <div className="bg-blue-50 p-3 rounded-full text-brandBlue"><ShoppingBag size={24} /></div>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-800">অ্যাডমিন ড্যাশবোর্ড</h1>
+          <p className="text-xs text-gray-500">ল্যামিয়া ইলেকট্রনিক্স এন্ড আইপিএস-এর ব্যবসায়িক চিত্র</p>
         </div>
-
-        <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between">
-          <div className="space-y-1">
-            <p className="text-xs font-bold text-gray-400 uppercase">পেন্ডিং অর্ডার</p>
-            <h3 className="text-2xl font-bold text-amber-600">{stats.pending} টি</h3>
-          </div>
-          <div className="bg-amber-50 p-3 rounded-full text-amber-600"><Hourglass size={24} /></div>
-        </div>
-
-        <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between">
-          <div className="space-y-1">
-            <p className="text-xs font-bold text-gray-400 uppercase">ডেলিভারড অর্ডার</p>
-            <h3 className="text-2xl font-bold text-green-600">{stats.delivered} টি</h3>
-          </div>
-          <div className="bg-green-50 p-3 rounded-full text-green-600"><CheckCircle2 size={24} /></div>
-        </div>
-
-        <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between">
-          <div className="space-y-1">
-            <p className="text-xs font-bold text-gray-400 uppercase">লো-স্টক প্রোডাক্ট</p>
-            <h3 className="text-2xl font-bold text-red-600">{stats.lowStock} টি</h3>
-          </div>
-          <div className="bg-red-50 p-3 rounded-full text-red-600"><AlertTriangle size={24} /></div>
+        <div className="flex items-center gap-1 text-xs text-red-600 bg-red-50 border border-red-100 font-bold px-4 py-2 rounded-lg">
+          <AlertTriangle size={14} />
+          <span>লো-স্টক প্রোডাক্ট: {lowStockCount} টি</span>
         </div>
       </div>
 
-      {/* Orders Table */}
+      {/* ======================================================== */}
+      {/* SALES ANALYTICS CONTROL PANEL */}
+      {/* ======================================================== */}
+      <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm space-y-6">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b pb-4 border-gray-100">
+          <div className="flex items-center gap-2">
+            <Calendar className="text-brandBlue" size={20} />
+            <h3 className="font-bold text-gray-800">বিক্রয় ও আয় বিশ্লেষণ (Sales Analytics)</h3>
+          </div>
+
+          {/* Filter Tabs */}
+          <div className="bg-gray-100 p-1 rounded-lg flex gap-1 w-full md:w-auto">
+            {[
+              { id: 'daily', name: 'আজকের (Daily)' },
+              { id: 'weekly', name: 'সাপ্তাহিক (Weekly)' },
+              { id: 'monthly', name: 'মাসিক (Monthly)' },
+              { id: 'custom', name: 'নির্দিষ্ট তারিখ (Custom)' }
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setFilterType(tab.id)}
+                className={`flex-1 md:flex-none px-4 py-2 rounded-md text-xs font-bold transition-all ${
+                  filterType === tab.id
+                    ? 'bg-brandBlue text-white shadow-sm'
+                    : 'text-gray-500 hover:bg-gray-50'
+                }`}
+              >
+                {tab.name}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Custom Date Picker Fields */}
+        {filterType === 'custom' && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg border border-gray-100 animate-fade-in">
+            <div>
+              <label className="block text-xs font-bold text-gray-500 mb-1">শুরুর তারিখ (Start Date)</label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-full border rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-brandBlue bg-white text-gray-700"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-500 mb-1">শেষের তারিখ (End Date)</label>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="w-full border rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-brandBlue bg-white text-gray-700"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Dynamic Analytics Stats */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 pt-2">
+          {/* Revenue */}
+          <div className="bg-blue-50/50 p-5 rounded-xl border border-blue-100/50 flex items-center justify-between">
+            <div className="space-y-1">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">সর্বমোট আয় (ডেলিভার্ড)</p>
+              <h4 className="text-xl font-extrabold text-brandBlue">৳{revenue.toLocaleString()}</h4>
+            </div>
+            <div className="bg-brandBlue text-white p-2.5 rounded-full"><DollarSign size={20} /></div>
+          </div>
+
+          {/* Total Orders */}
+          <div className="bg-indigo-50/50 p-5 rounded-xl border border-indigo-100/50 flex items-center justify-between">
+            <div className="space-y-1">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">মোট অর্ডার সংখ্যা</p>
+              <h4 className="text-xl font-extrabold text-indigo-700">{totalOrdersCount} টি</h4>
+            </div>
+            <div className="bg-indigo-600 text-white p-2.5 rounded-full"><ShoppingBag size={20} /></div>
+          </div>
+
+          {/* Average Order Value */}
+          <div className="bg-green-50/50 p-5 rounded-xl border border-green-100/50 flex items-center justify-between">
+            <div className="space-y-1">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">গড় অর্ডার মূল্য (AOV)</p>
+              <h4 className="text-xl font-extrabold text-green-700">৳{avgOrderValue.toLocaleString()}</h4>
+            </div>
+            <div className="bg-green-600 text-white p-2.5 rounded-full"><CheckCircle2 size={20} /></div>
+          </div>
+
+          {/* Pending Count */}
+          <div className="bg-amber-50/50 p-5 rounded-xl border border-amber-100/50 flex items-center justify-between">
+            <div className="space-y-1">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">পেন্ডিং প্রসেসিং</p>
+              <h4 className="text-xl font-extrabold text-amber-700">{pendingCount} টি</h4>
+            </div>
+            <div className="bg-amber-500 text-white p-2.5 rounded-full"><Hourglass size={20} /></div>
+          </div>
+        </div>
+      </div>
+
+      {/* ======================================================== */}
+      {/* FILTERED ORDERS TABLE */}
+      {/* ======================================================== */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="p-5 border-b border-gray-50 flex justify-between items-center bg-gray-50">
-          <h3 className="font-bold text-gray-800">কাস্টমারদের অর্ডার তালিকা</h3>
-          <span className="text-xs font-bold text-brandBlue bg-blue-50 px-3 py-1.5 rounded-full">সর্বমোট: {orders.length}</span>
+        <div className="p-5 border-b border-gray-50 flex justify-between items-center bg-gray-50 select-none">
+          <div className="flex items-center gap-1.5">
+            <ListTodo size={18} className="text-brandBlue" />
+            <h3 className="font-bold text-gray-800">অর্ডার তালিকা (ফিল্টার্ড)</h3>
+          </div>
+          <span className="text-xs font-bold text-brandBlue bg-blue-50 px-3 py-1.5 rounded-full">
+            অর্ডার সংখ্যা: {filteredOrders.length} টি
+          </span>
         </div>
 
         {loading ? (
           <div className="p-10 text-center font-semibold text-gray-400">লোডিং হচ্ছে...</div>
-        ) : orders.length > 0 ? (
+        ) : filteredOrders.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-sm">
               <thead>
@@ -145,7 +265,7 @@ export default function Dashboard() {
                 </tr>
               </thead>
               <tbody>
-                {orders.map((order) => (
+                {filteredOrders.map((order) => (
                   <tr key={order.id} className="border-b hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4 font-bold text-brandBlue">#{order.id}</td>
                     <td className="px-6 py-4">
@@ -187,7 +307,7 @@ export default function Dashboard() {
             </table>
           </div>
         ) : (
-          <div className="p-12 text-center text-gray-400 font-semibold">কোনো অর্ডার পাওয়া যায়নি!</div>
+          <div className="p-12 text-center text-gray-400 font-semibold">নির্বাচিত সময়ের কোনো অর্ডার পাওয়া যায়নি!</div>
         )}
       </div>
 

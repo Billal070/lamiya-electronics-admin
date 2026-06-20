@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { LayoutDashboard, FolderOpen, Award, Package, LogOut, Lock, Zap } from 'lucide-react';
+import { LayoutDashboard, FolderOpen, Award, Package, LogOut, Lock, Zap, SlidersHorizontal } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
@@ -99,7 +99,7 @@ export default function AdminLayout({ children }) {
     { name: 'ক্যাটাগরি', path: '/categories', icon: <FolderOpen size={18} /> },
     { name: 'ব্র্যান্ড', path: '/brands', icon: <Award size={18} /> },
     { name: 'প্রোডাক্টস', path: '/products', icon: <Package size={18} /> },
-    { name: 'সেটিংস', path: '/settings', icon: <SlidersHorizontal size={18} /> }, // নতুন যুক্ত হলো
+    { name: 'সেটিংস', path: '/settings', icon: <SlidersHorizontal size={18} /> },
   ];
 
   return (

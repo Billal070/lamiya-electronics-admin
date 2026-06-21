@@ -1,18 +1,19 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { ShoppingBag, Hourglass, CheckCircle2, AlertTriangle, Eye, X, Calendar, DollarSign, ListTodo } from 'lucide-react';
+import { ShoppingBag, Hourglass, CheckCircle2, AlertTriangle, Eye, X, Calendar, DollarSign, ListTodo, ShieldCheck } from 'lucide-react';
 
 export default function Dashboard() {
   const [orders, setOrders] = useState([]);
   const [lowStockCount, setLowStockCount] = useState(0);
+  const [stockLimit, setStockLimit] = useState(3); // ডাইনামিক লিমিট স্টেট
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [orderItems, setOrderItems] = useState([]);
   const [modalLoading, setModalLoading] = useState(false);
 
   // Analytics Filter States
-  const [filterType, setFilterType] = useState('monthly'); // 'daily' | 'weekly' | 'monthly' | 'custom'
+  const [filterType, setFilterType] = useState('monthly'); 
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
 
@@ -23,17 +24,27 @@ export default function Dashboard() {
   async function fetchDashboardData() {
     setLoading(true);
     
-    // 1. Fetch All Orders
+    // 1. Fetch Dynamic Stock warning limit from settings
+    const { data: settingsData } = await supabase
+      .from('settings')
+      .select('stock_alert_limit')
+      .eq('id', 1)
+      .single();
+
+    const currentLimit = settingsData?.stock_alert_limit || 3;
+    setStockLimit(currentLimit);
+
+    // 2. Fetch All Orders
     const { data: ordersData, error: ordersError } = await supabase
       .from('orders')
       .select('*')
       .order('created_at', { ascending: false });
 
-    // 2. Fetch Low Stock Count
+    // 3. Fetch products strictly under the customized warning limit
     const { data: productsData } = await supabase
       .from('products')
       .select('stock')
-      .lte('stock', 3);
+      .lte('stock', currentLimit);
 
     if (!ordersError && ordersData) {
       setOrders(ordersData);
@@ -72,9 +83,6 @@ export default function Dashboard() {
     setModalLoading(false);
   };
 
-  // ========================================================
-  // ANALYTICS CALCULATION LOGIC (Client-side timezone-safe)
-  // ========================================================
   const getFilteredOrders = () => {
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -97,10 +105,10 @@ export default function Dashboard() {
       }
 
       if (filterType === 'custom') {
-        if (!startDate || !endDate) return true; // Show all if dates not picked yet
+        if (!startDate || !endDate) return true; 
         const start = new Date(startDate);
         const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999); // Set to end of selected day
+        end.setHours(23, 59, 59, 999); 
         return orderDate >= start && orderDate <= end;
       }
 
@@ -108,38 +116,43 @@ export default function Dashboard() {
     });
   };
 
-  // Calculate filtered stats
   const filteredOrders = getFilteredOrders();
   const totalOrdersCount = filteredOrders.length;
   
-  // Total Revenue (Delivered Orders Only)
   const deliveredOrders = filteredOrders.filter(o => o.order_status === 'Delivered');
   const revenue = deliveredOrders.reduce((sum, o) => sum + Number(o.total_amount), 0);
 
-  // Pending Count
   const pendingCount = filteredOrders.filter(o => o.order_status === 'Pending').length;
 
-  // Average Order Value (AOV)
   const avgOrderValue = totalOrdersCount > 0 
     ? Math.round(filteredOrders.reduce((sum, o) => sum + Number(o.total_amount), 0) / totalOrdersCount) 
     : 0;
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">অ্যাডমিন ড্যাশবোর্ড</h1>
           <p className="text-xs text-gray-500">ল্যামিয়া ইলেকট্রনিক্স এন্ড আইপিএস-এর ব্যবসায়িক চিত্র</p>
         </div>
-        <div className="flex items-center gap-1 text-xs text-red-600 bg-red-50 border border-red-100 font-bold px-4 py-2 rounded-lg">
-          <AlertTriangle size={14} />
-          <span>লো-স্টক প্রোডাক্ট: {lowStockCount} টি</span>
-        </div>
+
+        {/* Dynamic Stock Indicator (লোগোর চাহিদামত বাবল ও কালার কন্ডিশন) */}
+        {lowStockCount > 0 ? (
+          /* ১. লিমিটের নিচে নামলে: রেড কালার, বাবল-শেইক এনিমেটেড অ্যালার্ট */
+          <div className="flex items-center gap-1.5 text-xs text-red-700 bg-red-50 border border-red-200 font-extrabold px-4 py-2 rounded-lg select-none shadow-sm animate-shakeBubble">
+            <AlertTriangle size={14} className="animate-pulse shrink-0" />
+            <span>লো-স্টক প্রোডাক্ট: {lowStockCount} টি (লিমিট: {stockLimit})</span>
+          </div>
+        ) : (
+          /* ২. লিমিটের উপরে থাকলে: শান্ত গ্রিন কালার, অল স্টক সেফ মেসেজ */
+          <div className="flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 font-bold px-4 py-2 rounded-lg select-none shadow-sm">
+            <CheckCircle2 size={14} className="shrink-0 text-emerald-600" />
+            <span>সকল স্টক নিরাপদ রয়েছে (Safe Stock)</span>
+          </div>
+        )}
       </div>
 
-      {/* ======================================================== */}
       {/* SALES ANALYTICS CONTROL PANEL */}
-      {/* ======================================================== */}
       <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm space-y-6">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b pb-4 border-gray-100">
           <div className="flex items-center gap-2">
@@ -147,7 +160,6 @@ export default function Dashboard() {
             <h3 className="font-bold text-gray-800">বিক্রয় ও আয় বিশ্লেষণ (Sales Analytics)</h3>
           </div>
 
-          {/* Filter Tabs */}
           <div className="bg-gray-100 p-1 rounded-lg flex gap-1 w-full md:w-auto">
             {[
               { id: 'daily', name: 'আজকের (Daily)' },
@@ -171,7 +183,6 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Custom Date Picker Fields */}
         {filterType === 'custom' && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg border border-gray-100 animate-fade-in">
             <div>
@@ -195,12 +206,11 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Dynamic Analytics Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 pt-2">
           {/* Revenue */}
           <div className="bg-blue-50/50 p-5 rounded-xl border border-blue-100/50 flex items-center justify-between">
             <div className="space-y-1">
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">সর্বমোট আয় (ডেলিভার্ড)</p>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">सर्वমোট আয় (ডেলিভার্ড)</p>
               <h4 className="text-xl font-extrabold text-brandBlue">৳{revenue.toLocaleString()}</h4>
             </div>
             <div className="bg-brandBlue text-white p-2.5 rounded-full"><DollarSign size={20} /></div>
@@ -235,9 +245,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ======================================================== */}
       {/* FILTERED ORDERS TABLE */}
-      {/* ======================================================== */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="p-5 border-b border-gray-50 flex justify-between items-center bg-gray-50 select-none">
           <div className="flex items-center gap-1.5">

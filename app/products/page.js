@@ -65,7 +65,7 @@ export default function Products() {
     setSpecs(updated);
   };
 
-  // Trigger Edit Mode (প্রোডাক্ট এডিট মোড চালু করা)
+  // Trigger Edit Mode
   const startEditProduct = (product) => {
     setEditingProduct(product);
     setName(product.name);
@@ -455,16 +455,17 @@ export default function Products() {
                         {/* কাস্টম এডিট বাটন */}
                         <button
                           onClick={() => startEditProduct(p)}
-                          className="px-2.5 py-1.5 bg-blue-50 hover:bg-brandBlue text-brandBlue hover:text-white font-bold text-xs rounded-lg transition-all flex items-center gap-1 shadow-sm"
+                          className="px-2.5 py-1.5 bg-blue-50 hover:bg-brandBlue text-brandBlue hover:text-white font-bold text-xs rounded-lg transition-all flex items-center gap-1 shadow-sm whitespace-nowrap"
                         >
                           <Pencil size={13} /> এডিট
                         </button>
 
+                        {/* কাস্টম রিভিউ বাটন (সংশোধিত বাংলা টেক্সট ও নো-র‍্যাপ) */}
                         <button
                           onClick={() => setSelectedProductForReview(p)}
-                          className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-500 text-amber-700 hover:text-white font-bold text-xs rounded-lg transition-all flex items-center gap-1"
+                          className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-500 text-amber-700 hover:text-white font-bold text-xs rounded-lg transition-all flex items-center gap-1 whitespace-nowrap"
                         >
-                          <Star size={13} fill="currentColor" /> 리뷰
+                          <Star size={13} fill="currentColor" /> রিভিউ
                         </button>
                         
                         <button

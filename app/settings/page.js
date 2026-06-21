@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { SlidersHorizontal, Save, Phone, Mail, MapPin, Globe } from 'lucide-react';
+import { SlidersHorizontal, Save, Phone, Mail, MapPin, Globe, AlertTriangle } from 'lucide-react';
 
 export default function Settings() {
   const [loading, setLoading] = useState(false);
@@ -16,6 +16,7 @@ export default function Settings() {
   const [descBn, setDescBn] = useState('');
   const [facebook, setFacebook] = useState('');
   const [youtube, setYoutube] = useState('');
+  const [stockLimit, setStockLimit] = useState(3); // নতুন স্টক লিমিট স্টেট
 
   useEffect(() => {
     fetchSettings();
@@ -38,6 +39,7 @@ export default function Settings() {
       setDescBn(data.footer_desc_bn);
       setFacebook(data.facebook_url);
       setYoutube(data.youtube_url);
+      setStockLimit(data.stock_alert_limit || 3);
     }
     setFetchLoading(false);
   }
@@ -56,7 +58,8 @@ export default function Settings() {
         footer_desc_en: descEn,
         footer_desc_bn: descBn,
         facebook_url: facebook,
-        youtube_url: youtube
+        youtube_url: youtube,
+        stock_alert_limit: Number(stockLimit) // নতুন ডাটা আপডেট
       })
       .eq('id', 1);
 
@@ -133,6 +136,23 @@ export default function Settings() {
                 required
                 value={addressBn}
                 onChange={(e) => setAddressBn(e.target.value)}
+                className="w-full border rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-brandBlue bg-gray-50"
+              />
+            </div>
+          </div>
+
+          {/* নতুন স্টক লিমিট ইনপুট এরিয়া */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-xs font-bold text-gray-500 mb-1 flex items-center gap-1">
+                <AlertTriangle size={14} className="text-amber-500" /> স্টক ওয়ার্নিং লিমিট (অ্যালার্ট থ্রেশহোল্ড)
+              </label>
+              <input
+                type="number"
+                required
+                placeholder="যেমন: ৩"
+                value={stockLimit}
+                onChange={(e) => setStockLimit(e.target.value)}
                 className="w-full border rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-brandBlue bg-gray-50"
               />
             </div>

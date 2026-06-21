@@ -1,12 +1,12 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { ShoppingBag, Hourglass, CheckCircle2, AlertTriangle, Eye, X, Calendar, DollarSign, ListTodo, ShieldCheck } from 'lucide-react';
+import { ShoppingBag, Hourglass, CheckCircle2, AlertTriangle, Eye, X, Calendar, DollarSign, ListTodo } from 'lucide-react';
 
 export default function Dashboard() {
   const [orders, setOrders] = useState([]);
-  const [lowStockCount, setLowStockCount] = useState(0);
-  const [stockLimit, setStockLimit] = useState(3); // ডাইনামিক লিমিট স্টেট
+  const [totalStock, setTotalStock] = useState(0); // পুরো ওয়েবসাইটের সর্বমোট স্টক স্টেট
+  const [stockLimit, setStockLimit] = useState(3); // সেটিংস থেকে আসা লিমিট স্টেট
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [orderItems, setOrderItems] = useState([]);
@@ -40,18 +40,35 @@ export default function Dashboard() {
       .select('*')
       .order('created_at', { ascending: false });
 
-    // 3. Fetch products strictly under the customized warning limit
+    // 3. Fetch all products to calculate total sum of stocks
     const { data: productsData } = await supabase
       .from('products')
-      .select('stock')
-      .lte('stock', currentLimit);
+      .select('stock');
 
     if (!ordersError && ordersData) {
       setOrders(ordersData);
-      setLowStockCount(productsData ? productsData.length : 0);
+      
+      // জিপ ফাইলে থাকা সব প্রোডাক্টের স্টক যোগ করা (Sum calculation)
+      const totalSum = productsData ? productsData.reduce((acc, p) => acc + (p.stock || 0), 0) : 0;
+      setTotalStock(totalSum);
+
+      // Calculate Stats
+      const deliveredOrders = ordersData.filter(o => o.order_status === 'Delivered');
+      const totalSales = deliveredOrders.reduce((acc, o) => acc + Number(o.total_amount), 0);
+      const pendingCount = ordersData.filter(o => o.order_status === 'Pending').length;
+
+      setStats({
+        totalSales,
+        pending: pendingCount,
+        delivered: deliveredOrders.length,
+        lowStock: 0 // We handle threshold dynamically now
+      });
     }
     setLoading(false);
   }
+
+  // State stats helper
+  const [stats, setStats] = useState({ totalSales: 0, pending: 0, delivered: 0 });
 
   // Change Order Status
   const handleStatusChange = async (orderId, newStatus) => {
@@ -136,18 +153,18 @@ export default function Dashboard() {
           <p className="text-xs text-gray-500">ল্যামিয়া ইলেকট্রনিক্স এন্ড আইপিএস-এর ব্যবসায়িক চিত্র</p>
         </div>
 
-        {/* Dynamic Stock Indicator (লোগোর চাহিদামত বাবল ও কালার কন্ডিশন) */}
-        {lowStockCount > 0 ? (
-          /* ১. লিমিটের নিচে নামলে: রেড কালার, বাবল-শেইক এনিমেটেড অ্যালার্ট */
+        {/* Dynamic Total Stock Alert Indicator (রিয়েল-টাইম সর্বমোট স্টক ট্র্যাকিং) */}
+        {totalStock <= stockLimit ? (
+          /* ১. সর্বমোট স্টক লিমিটের নিচে নামলে: লাল বাবল-শেইক এনিমেটেড অ্যালার্ট */
           <div className="flex items-center gap-1.5 text-xs text-red-700 bg-red-50 border border-red-200 font-extrabold px-4 py-2 rounded-lg select-none shadow-sm animate-shakeBubble">
             <AlertTriangle size={14} className="animate-pulse shrink-0" />
-            <span>লো-স্টক প্রোডাক্ট: {lowStockCount} টি (লিমিট: {stockLimit})</span>
+            <span>লো-স্টক সতর্কবার্তা: সর্বমোট স্টক {totalStock} টি (লিমিট: {stockLimit})</span>
           </div>
         ) : (
-          /* ২. লিমিটের উপরে থাকলে: শান্ত গ্রিন কালার, অল স্টক সেফ মেসেজ */
+          /* ২. সর্বমোট স্টক লিমিটের উপরে থাকলে: শান্ত গ্রিন কালার ও সেফ স্টক মেসেজ */
           <div className="flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 font-bold px-4 py-2 rounded-lg select-none shadow-sm">
             <CheckCircle2 size={14} className="shrink-0 text-emerald-600" />
-            <span>সকল স্টক নিরাপদ রয়েছে (Safe Stock)</span>
+            <span>স্টক নিরাপদ: সর্বমোট স্টক {totalStock} টি</span>
           </div>
         )}
       </div>
@@ -160,6 +177,7 @@ export default function Dashboard() {
             <h3 className="font-bold text-gray-800">বিক্রয় ও আয় বিশ্লেষণ (Sales Analytics)</h3>
           </div>
 
+          {/* Filter Tabs */}
           <div className="bg-gray-100 p-1 rounded-lg flex gap-1 w-full md:w-auto">
             {[
               { id: 'daily', name: 'আজকের (Daily)' },
@@ -210,7 +228,7 @@ export default function Dashboard() {
           {/* Revenue */}
           <div className="bg-blue-50/50 p-5 rounded-xl border border-blue-100/50 flex items-center justify-between">
             <div className="space-y-1">
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">सर्वমোট আয় (ডেলিভার্ড)</p>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">সর্বমোট আয় (ডেলিভার্ড)</p>
               <h4 className="text-xl font-extrabold text-brandBlue">৳{revenue.toLocaleString()}</h4>
             </div>
             <div className="bg-brandBlue text-white p-2.5 rounded-full"><DollarSign size={20} /></div>

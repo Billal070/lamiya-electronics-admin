@@ -3,10 +3,30 @@
 @tailwind utilities;
 
 body {
-  background-color: #F3F4F6;
+  background-color: #F3F4F6; /* অ্যাডমিন ড্যাশবোর্ডের প্রফেশনাল হালকা ধূসর ব্যাকগ্রাউন্ড */
   color: #1F2937;
   font-family: ui-sans-serif, system-ui, sans-serif;
 }
+
+/* ড্যাশবোর্ডের স্ক্রলবার সুন্দর করার জন্য কাস্টম স্ক্রলবার ডিজাইন */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #F3F4F6;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
+
 /* কাস্টম বাবল-শেইক অ্যানিমেশন (শুকানো ও কাপার ইফেক্ট) */
 @keyframes shakeBubble {
   0%, 100% { transform: scale(1) rotate(0deg); }

@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Trash2, Plus, Image as ImageIcon, Sparkles, X } from 'lucide-react';
+import { Trash2, Plus, Image as ImageIcon, Sparkles, X, Star } from 'lucide-react';
 
 export default function Products() {
   const [products, setProducts] = useState([]);
@@ -21,8 +21,15 @@ export default function Products() {
   const [selectedBrand, setSelectedBrand] = useState('');
   const [files, setFiles] = useState([]);
   
-  // Specs: Array of Key-Value [{key: 'Battery Capacity', value: '200Ah'}]
+  // Specs: Array of Key-Value
   const [specs, setSpecs] = useState([{ key: '', value: '' }]);
+
+  // Fake Review States (অ্যাডমিনদের জন্য কাস্টম রিভিউ ফিচার)
+  const [selectedProductForReview, setSelectedProductForReview] = useState(null);
+  const [fakeUserName, setFakeUserName] = useState('');
+  const [fakeRating, setFakeRating] = useState(5);
+  const [fakeComment, setFakeComment] = useState('');
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -30,22 +37,18 @@ export default function Products() {
 
   async function fetchData() {
     setFetchLoading(true);
-    // 1. Fetch Categories
     const { data: catData } = await supabase.from('categories').select('*').order('name');
     if (catData) setCategories(catData);
 
-    // 2. Fetch Brands
     const { data: brandData } = await supabase.from('brands').select('*').order('name');
     if (brandData) setBrands(brandData);
 
-    // 3. Fetch Products
     const { data: prodData } = await supabase.from('products').select('*, categories(name)').order('created_at', { ascending: false });
     if (prodData) setProducts(prodData);
     
     setFetchLoading(false);
   }
 
-  // Spec Input Handlers
   const handleAddSpecRow = () => {
     setSpecs([...specs, { key: '', value: '' }]);
   };
@@ -67,7 +70,6 @@ export default function Products() {
 
     let imageUrls = [];
 
-    // 1. Upload multiple images if exists
     if (files.length > 0) {
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
@@ -86,7 +88,6 @@ export default function Products() {
       }
     }
 
-    // 2. Convert Specs array to JSONB Object
     const specificationsObj = {};
     specs.forEach((s) => {
       if (s.key && s.value) {
@@ -96,7 +97,6 @@ export default function Products() {
 
     const slug = name.toLowerCase().replace(/ /g, '-').replace(/[^\w-]+/g, '');
 
-    // 3. Insert Product to DB
     const { error } = await supabase.from('products').insert({
       name,
       slug,
@@ -111,7 +111,6 @@ export default function Products() {
     });
 
     if (!error) {
-      // Reset Form
       setName('');
       setDescription('');
       setPrice('');
@@ -122,17 +121,43 @@ export default function Products() {
       setFiles([]);
       setSpecs([{ key: '', value: '' }]);
       setShowForm(false);
-      fetchData(); // Refresh list
+      fetchData();
     } else {
       alert('প্রোডাক্ট যুক্ত করতে ত্রুটি ঘটেছে: ' + error.message);
     }
     setLoading(false);
   };
 
+  // Submit Fake Review from Admin Panel
+  const handleAddFakeReview = async (e) => {
+    e.preventDefault();
+    if (!selectedProductForReview || !fakeComment) return;
+    setReviewSubmitting(true);
+
+    const { error } = await supabase
+      .from('reviews')
+      .insert({
+        product_id: selectedProductForReview.id,
+        user_name: fakeUserName || 'Anonymous Customer',
+        rating: Number(fakeRating),
+        comment: fakeComment
+      });
+
+    if (!error) {
+      setFakeUserName('');
+      setFakeComment('');
+      setFakeRating(5);
+      setSelectedProductForReview(null);
+      alert('রিভিউ সফলভাবে যুক্ত হয়েছে এবং রেটিং আপডেট হয়েছে!');
+    } else {
+      alert('রিভিউ যুক্ত করতে সমস্যা হয়েছে: ' + error.message);
+    }
+    setReviewSubmitting(false);
+  };
+
   const handleDeleteProduct = async (id, images) => {
     if (!confirm('আপনি কি নিশ্চিতভাবে এই প্রোডাক্টটি ডিলিট করতে চান?')) return;
 
-    // 1. Remove product images from storage
     if (images && images.length > 0) {
       const paths = images.map(imgUrl => imgUrl.split('/public/lamiya-electronics/')[1]).filter(Boolean);
       if (paths.length > 0) {
@@ -140,7 +165,6 @@ export default function Products() {
       }
     }
 
-    // 2. Delete product from DB
     const { error } = await supabase.from('products').delete().eq('id', id);
     if (!error) {
       setProducts(prev => prev.filter(p => p.id !== id));
@@ -154,7 +178,7 @@ export default function Products() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">প্রোডাক্ট ম্যানেজমেন্ট</h1>
-          <p className="text-xs text-gray-500">ল্যামিয়া ইলেকট্রনিক্স-এর সামগ্রিক পণ্য ম্যানেজ করুন</p>
+          <p className="text-xs text-gray-500">ল্যামিয়া ইলেকট্রনিক্স-এর সামগ্রিক পণ্য ও কাস্টম রিভিউ ম্যানেজ করুন</p>
         </div>
         <button
           onClick={() => setShowForm(!showForm)}
@@ -165,14 +189,14 @@ export default function Products() {
         </button>
       </div>
 
-      {/* Product Form (Modal style / Expandable) */}
+      {/* Product Form */}
       {showForm && (
         <form onSubmit={handleAddProduct} className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm space-y-6">
           <h3 className="font-bold text-gray-800 border-b pb-2">নতুন পণ্যের বিবরণ দিন</h3>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label className="block text-xs font-bold text-gray-500 mb-1">পণ্যের নাম (যেমন: Luminous Eco Watt 650 IPS)</label>
+              <label className="block text-xs font-bold text-gray-500 mb-1">পণ্যের নাম</label>
               <input
                 type="text"
                 required
@@ -246,7 +270,7 @@ export default function Products() {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-bold text-gray-500 mb-1">পণ্যের ছবি সিলেক্ট করুন (একাধিক দেওয়া যাবে)</label>
+              <label className="block text-xs font-bold text-gray-500 mb-1">পণ্যের ছবি সিলেক্ট করুন</label>
               <input
                 type="file"
                 multiple
@@ -270,7 +294,7 @@ export default function Products() {
           {/* Specs Builder */}
           <div className="space-y-3">
             <div className="flex justify-between items-center border-b pb-2">
-              <h4 className="font-bold text-sm text-gray-700 flex items-center gap-1.5"><Sparkles size={16} /> প্রোডাক্ট স্পেসিফিকেশন (Specifications)</h4>
+              <h4 className="font-bold text-sm text-gray-700 flex items-center gap-1.5"><Sparkles size={16} /> প্রোডাক্ট স্পেসিফিকেশন</h4>
               <button
                 type="button"
                 onClick={handleAddSpecRow}
@@ -285,14 +309,14 @@ export default function Products() {
                 <div key={idx} className="flex gap-4 items-center">
                   <input
                     type="text"
-                    placeholder="বৈশিষ্ট্যের নাম (যেমন: Warranty)"
+                    placeholder="বৈশিষ্ট্যের নাম"
                     value={spec.key}
                     onChange={(e) => handleSpecChange(idx, 'key', e.target.value)}
                     className="w-1/2 border rounded-lg px-4 py-2 text-xs focus:outline-none bg-gray-50"
                   />
                   <input
                     type="text"
-                    placeholder="মান (যেমন: 24 Months)"
+                    placeholder="মান"
                     value={spec.value}
                     onChange={(e) => handleSpecChange(idx, 'value', e.target.value)}
                     className="w-1/2 border rounded-lg px-4 py-2 text-xs focus:outline-none bg-gray-50"
@@ -367,12 +391,22 @@ export default function Products() {
                     <td className="px-6 py-4 font-semibold text-gray-600">{p.stock} টি</td>
                     <td className="px-6 py-4 font-semibold text-gray-500 text-xs">{p.categories?.name || 'Electronics'}</td>
                     <td className="px-6 py-4 text-center">
-                      <button
-                        onClick={() => handleDeleteProduct(p.id, p.images)}
-                        className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-full transition-colors"
-                      >
-                        <Trash2 size={16} />
-                      </button>
+                      <div className="flex items-center justify-center gap-2">
+                        {/* কাস্টম রিভিউ যোগ করার বাটন */}
+                        <button
+                          onClick={() => setSelectedProductForReview(p)}
+                          className="px-3 py-1.5 bg-amber-50 hover:bg-amber-500 text-amber-700 hover:text-white font-bold text-xs rounded-lg transition-all flex items-center gap-1"
+                        >
+                          <Star size={13} fill="currentColor" /> রিভিউ
+                        </button>
+                        
+                        <button
+                          onClick={() => handleDeleteProduct(p.id, p.images)}
+                          className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-full transition-colors"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -380,9 +414,80 @@ export default function Products() {
             </table>
           </div>
         ) : (
-          <div className="p-10 text-center text-gray-400 font-semibold">কোনো প্রোডাক্ট পাওয়া যায়নি। উপরের বাটনে ক্লিক করে প্রথম প্রোডাক্টটি যুক্ত করুন!</div>
+          <div className="p-10 text-center text-gray-400 font-semibold">কোনো প্রোডাক্ট পাওয়া যায়নি।</div>
         )}
       </div>
+
+      {/* ======================================================== */}
+      {/* FAKE REVIEW CREATION MODAL WINDOW */}
+      {/* ======================================================== */}
+      {selectedProductForReview && (
+        <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full overflow-hidden shadow-xl border">
+            <div className="p-5 border-b flex justify-between items-center bg-gray-50">
+              <div>
+                <h3 className="font-bold text-gray-800">রিভিউ যোগ করুন:</h3>
+                <p className="text-xs text-gray-400 line-clamp-1 max-w-[250px]">{selectedProductForReview.name}</p>
+              </div>
+              <button 
+                onClick={() => setSelectedProductForReview(null)} 
+                className="p-1.5 bg-gray-200 hover:bg-red-500 hover:text-white rounded-full transition-all"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddFakeReview} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-500 mb-1">রিভিউয়ারের নাম (বসালে সেটিই শো করবে)</label>
+                <input
+                  type="text"
+                  placeholder="যেমন: আরিফ রহমান, সুমি আক্তার"
+                  value={fakeUserName}
+                  onChange={(e) => setFakeUserName(e.target.value)}
+                  className="w-full border rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-brandBlue bg-gray-50"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-500 mb-1">রেটিং সিলেক্ট করুন (Star Rating)</label>
+                <select
+                  value={fakeRating}
+                  onChange={(e) => setFakeRating(e.target.value)}
+                  className="w-full border rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-brandBlue bg-gray-50 text-gray-700"
+                >
+                  <option value="5">★★★★★ (5 Stars)</option>
+                  <option value="4">★★★★☆ (4 Stars)</option>
+                  <option value="3">★★★☆☆ (3 Stars)</option>
+                  <option value="2">★★☆☆☆ (2 Stars)</option>
+                  <option value="1">★☆☆☆☆ (1 Star)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-500 mb-1">রিভিউ কমেন্ট / মন্তব্য</label>
+                <textarea
+                  rows="3"
+                  required
+                  placeholder="যেমন: খুবই ভালো প্রোডাক্ট, ব্যাকআপ অনেক ভালো দিচ্ছে..."
+                  value={fakeComment}
+                  onChange={(e) => setFakeComment(e.target.value)}
+                  className="w-full border rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-brandBlue bg-gray-50"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={reviewSubmitting}
+                className="w-full py-3 bg-brandBlue text-white font-bold rounded-xl hover:bg-opacity-95 transition-all text-xs flex items-center justify-center gap-2 shadow"
+              >
+                <Star size={14} fill="currentColor" />
+                {reviewSubmitting ? 'সেভ হচ্ছে...' : 'রিভিউ সংরক্ষণ করুন'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

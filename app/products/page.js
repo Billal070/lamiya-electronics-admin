@@ -21,6 +21,9 @@ export default function Products() {
   const [selectedBrand, setSelectedBrand] = useState('');
   const [files, setFiles] = useState([]);
   
+  // New Key Features string state for easy line-by-line input
+  const [keyFeatures, setKeyFeatures] = useState('');
+
   // Specs: Array of Key-Value
   const [specs, setSpecs] = useState([{ key: '', value: '' }]);
 
@@ -65,7 +68,7 @@ export default function Products() {
     setSpecs(updated);
   };
 
-  // Trigger Edit Mode
+  // Trigger Edit Mode (পণ্য এডিট মোড)
   const startEditProduct = (product) => {
     setEditingProduct(product);
     setName(product.name);
@@ -77,6 +80,9 @@ export default function Products() {
     setSelectedBrand(product.brand_id || '');
     setFiles([]); // Reset file input
     
+    // Pre-populate key features to textarea (newline separated)
+    setKeyFeatures(product.key_features ? product.key_features.join('\n') : '');
+
     // Parse Specifications back to UI rows
     if (product.specifications && Object.keys(product.specifications).length > 0) {
       const specRows = Object.entries(product.specifications).map(([key, value]) => ({
@@ -89,7 +95,6 @@ export default function Products() {
     }
     
     setShowForm(true);
-    // Smooth scroll to top form
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -104,6 +109,7 @@ export default function Products() {
     setSelectedBrand('');
     setFiles([]);
     setSpecs([{ key: '', value: '' }]);
+    setKeyFeatures('');
     setEditingProduct(null);
     setShowForm(false);
   };
@@ -116,7 +122,6 @@ export default function Products() {
 
     let imageUrls = editingProduct ? editingProduct.images : [];
 
-    // 1. Upload new images if selected
     if (files.length > 0) {
       const newUrls = [];
       for (let i = 0; i < files.length; i++) {
@@ -137,13 +142,19 @@ export default function Products() {
       imageUrls = editingProduct ? [...imageUrls, ...newUrls] : newUrls;
     }
 
-    // 2. Convert Specs to JSONB
+    // Convert Specs to JSONB
     const specificationsObj = {};
     specs.forEach((s) => {
       if (s.key && s.value) {
         specificationsObj[s.key] = s.value;
       }
     });
+
+    // New Line-by-line Features convert to Array
+    const keyFeaturesArray = keyFeatures
+      .split('\n')
+      .map(item => item.trim())
+      .filter(Boolean); // Filter empty rows
 
     const slug = name.toLowerCase().replace(/ /g, '-').replace(/[^\w-]+/g, '');
 
@@ -157,18 +168,17 @@ export default function Products() {
       category_id: selectedCat ? Number(selectedCat) : null,
       brand_id: selectedBrand ? Number(selectedBrand) : null,
       images: imageUrls,
-      specifications: specificationsObj
+      specifications: specificationsObj,
+      key_features: keyFeaturesArray // নতুন যুক্ত হলো
     };
 
     let response;
     if (editingProduct) {
-      // Execute UPDATE
       response = await supabase
         .from('products')
         .update(productData)
         .eq('id', editingProduct.id);
     } else {
-      // Execute INSERT
       response = await supabase
         .from('products')
         .insert(productData);
@@ -341,6 +351,20 @@ export default function Products() {
             </div>
           </div>
 
+          {/* New Key Features Textarea Field (কুইক স্পেসিফিকেশন ইনপুট) */}
+          <div>
+            <label className="block text-xs font-bold text-gray-500 mb-1">
+              কুইক স্পেসিফিকেশন (প্রতি লাইনে একটি করে বৈশিষ্ট্য লিখুন - Key Features)
+            </label>
+            <textarea
+              rows="4"
+              placeholder="যেমন:&#10;Model: Smarten 1250VA (12V)&#10;Rated Power: 900 Watts&#10;Warranty: 2 Year Parts"
+              value={keyFeatures}
+              onChange={(e) => setKeyFeatures(e.target.value)}
+              className="w-full border rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-brandBlue bg-gray-50 font-mono"
+            />
+          </div>
+
           <div>
             <label className="block text-xs font-bold text-gray-500 mb-1">পণ্যের বিবরণ (Description)</label>
             <textarea
@@ -354,7 +378,7 @@ export default function Products() {
           {/* Specs Builder */}
           <div className="space-y-3">
             <div className="flex justify-between items-center border-b pb-2">
-              <h4 className="font-bold text-sm text-gray-700 flex items-center gap-1.5"><Sparkles size={16} /> প্রোডাক্ট স্পেসিফিকেশন</h4>
+              <h4 className="font-bold text-gray-700 flex items-center gap-1.5"><Sparkles size={16} /> প্রোডাক্ট স্পেসিফিকেশন</h4>
               <button
                 type="button"
                 onClick={handleAddSpecRow}
@@ -452,7 +476,6 @@ export default function Products() {
                     <td className="px-6 py-4 font-semibold text-gray-500 text-xs">{p.categories?.name || 'Electronics'}</td>
                     <td className="px-6 py-4 text-center">
                       <div className="flex items-center justify-center gap-2">
-                        {/* কাস্টম এডিট বাটন */}
                         <button
                           onClick={() => startEditProduct(p)}
                           className="px-2.5 py-1.5 bg-blue-50 hover:bg-brandBlue text-brandBlue hover:text-white font-bold text-xs rounded-lg transition-all flex items-center gap-1 shadow-sm whitespace-nowrap"
@@ -460,7 +483,6 @@ export default function Products() {
                           <Pencil size={13} /> এডিট
                         </button>
 
-                        {/* কাস্টম রিভিউ বাটন (সংশোধিত বাংলা টেক্সট ও নো-র‍্যাপ) */}
                         <button
                           onClick={() => setSelectedProductForReview(p)}
                           className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-500 text-amber-700 hover:text-white font-bold text-xs rounded-lg transition-all flex items-center gap-1 whitespace-nowrap"

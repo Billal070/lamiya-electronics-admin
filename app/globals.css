@@ -1,9 +1,12 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* কাস্টম বাবল-শেইক অ্যানিমেশন (শুকানো ও কাপার ইফেক্ট) */
+@keyframes shakeBubble {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  20% { transform: scale(1.08) rotate(-1.5deg); }
+  40% { transform: scale(0.96) rotate(1.5deg); }
+  60% { transform: scale(1.05) rotate(-1deg); }
+  80% { transform: scale(0.98) rotate(1deg); }
+}
 
-body {
-  background-color: #F3F4F6;
-  color: #1F2937;
-  font-family: ui-sans-serif, system-ui, sans-serif;
+.animate-shakeBubble {
+  animation: shakeBubble 1.2s infinite ease-in-out;
 }
